@@ -20,6 +20,49 @@ This project will be expanded later to include camera-based gesture tracking and
 - Power Supply: External 5V
 - Communication: WiFi or ESP-NOW (wireless control)
 
+## 📊 Block Diagram
+                 +--------------------+
+                 |    MPU6050 IMU     |
+                 |  (Gesture Sensor)  |
+                 +--------------------+
+                           |
+                        I2C (SDA, SCL)
+                           |
+                           v
+            +-----------------------------+
+            |     ESP32 - Transmitter     |
+            |  ("Gesture Unit")           |
+            |                             |
+            | - Reads IMU data            |
+            | - Sends via ESP-NOW or WiFi |
+            +-----------------------------+
+                           |
+                      Wireless (2.4 GHz)
+                           v
+            +-----------------------------+
+            |     ESP32 - Receiver        |
+            |  ("Arm Controller Unit")    |
+            |                             |
+            | - Receives gesture data     |
+            | - Maps to servo angles      |
+            +-----------------------------+
+                    |     |     |     |
+                   PWM   PWM   PWM   PWM
+                    |     |     |     |
+                    v     v     v     v
+               +-------+-------+-------+-------+
+               |Servo 1|Servo 2|Servo 3|Servo 4|
+               +-------+-------+-------+-------+
+
+                     [Robotic Arm Joints]
+
+                     +------------------+
+                     |   5V Power Source |
+                     +------------------+
+                             |
+                             v
+                  Powers Servos and ESP32s
+
 ## 📁 Project Structure
 /code        → ESP32 code for gesture input and servo control
 /assets      → Photos, videos, diagrams
