@@ -1,0 +1,66 @@
+// === ESP‑NOW GLOVE SENDER ===
+// Reads one flex sensor on GPIO32 and sends filtered value to the ARM board.
+
+#include <WiFi.h>
+#include <esp_now.h>
+#include <esp_wifi.h>  // for wifi_tx_info_t on recent cores
+
+const int FLEX_PIN = 32;            // ADC1 pin
+const float ALPHA = 0.20f;          // low-pass filter (lower = smoother)
+float filt = 0;
+
+struct Payload { uint16_t flex; uint8_t id; } tx;
+
+uint8_t ARM_MAC[6];
+// Paste your ARM board's STA MAC here:
+const char* ARM_MAC_STR = "F8:B3:B7:7F:1E:D0";
+
+bool parseMac(const char* s, uint8_t out[6]){
+  return 6 == sscanf(s, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                     &out[0], &out[1], &out[2], &out[3], &out[4], &out[5]);
+}
+
+void onSend(const wifi_tx_info_t* info, esp_now_send_status_t status){
+  // optional debug:
+  // Serial.printf("send %s\n", status==ESP_NOW_SEND_SUCCESS?"OK":"FAIL");
+}
+
+void setup(){
+  Serial.begin(115200);
+  delay(200);
+  Serial.println("\n=== ESP‑NOW GLOVE SENDER ===");
+
+  // Flex ADC
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+  analogSetPinAttenuation(FLEX_PIN, ADC_11db);
+  filt = analogRead(FLEX_PIN);
+
+  // ESP‑NOW init
+  WiFi.mode(WIFI_STA);
+  if (!parseMac(ARM_MAC_STR, ARM_MAC)){ Serial.println("BAD ARM MAC"); while(1){} }
+  if (esp_now_init() != ESP_OK){ Serial.println("ESP‑NOW init FAILED"); while(1){} }
+  esp_now_register_send_cb(onSend);
+
+  esp_now_peer_info_t peer{};
+  memcpy(peer.peer_addr, ARM_MAC, 6);
+  peer.channel = 0;     // same channel
+  peer.encrypt = false;
+  if (esp_now_add_peer(&peer) != ESP_OK){ Serial.println("Add peer FAILED"); while(1){} }
+
+  Serial.println("GLOVE SENDER ready.");
+}
+
+void loop(){
+  int raw = analogRead(FLEX_PIN);
+  filt += ALPHA * (raw - filt);
+
+  tx.flex = (uint16_t)constrain((int)lroundf(filt), 0, 4095);
+  tx.id   = 0;
+
+  esp_now_send(ARM_MAC, (uint8_t*)&tx, sizeof(tx));
+
+  static unsigned long last=0;
+  if (millis()-last > 300){ last=millis(); Serial.printf("sending flex=%u\n", tx.flex); }
+  delay(15); // ~66 Hz
+}
