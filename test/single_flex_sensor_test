@@ -1,0 +1,35 @@
+// ESP32 DevKit — single flex sensor on GPIO32 (ADC1)
+// Wiring:
+// 3.3V → Flex end 1
+// Flex end 2 → junction row
+// Junction → GPIO32 + 10kΩ → GND   (optional 0.1 µF: Junction → GND)
+// ESP32 GND → breadboard GND rail
+
+const int FLEX_PIN = 32;      // ADC1 pin
+const float ALPHA = 0.20f;    // 0..1, lower = smoother
+const int   PRINT_MS = 50;    // ~20 Hz
+
+float filt = 0;
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+
+  analogReadResolution(12);           // 0..4095
+  analogSetAttenuation(ADC_11db);     // ~0..3.3V
+  analogSetPinAttenuation(FLEX_PIN, ADC_11db);
+
+  filt = analogRead(FLEX_PIN);        // prime filter
+  Serial.println("\nFlex on GPIO32. Keep straight, then bend and watch values...");
+}
+
+void loop() {
+  int raw = analogRead(FLEX_PIN);     // 0..4095
+  filt += ALPHA * (raw - filt);       // low‑pass
+
+  static unsigned long last = 0;
+  if (millis() - last >= PRINT_MS) {
+    last = millis();
+    Serial.printf("RAW:%4d  FILT:%4.0f\n", raw, filt);
+  }
+}
