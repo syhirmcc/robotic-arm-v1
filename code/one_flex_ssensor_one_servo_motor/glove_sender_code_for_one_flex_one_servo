@@ -1,18 +1,18 @@
-// === ESP‑NOW GLOVE SENDER ===
-// Reads one flex sensor on GPIO32 and sends filtered value to the ARM board.
+// === ESP‑NOW GLOVE SENDER (Nano ESP32) ===
+// Reads one flex sensor on A0 and sends filtered value to the ARM board.
 
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>  // for wifi_tx_info_t on recent cores
 
-const int FLEX_PIN = 32;            // ADC1 pin
+const int FLEX_PIN = A0;            // Nano ESP32 analog pin (A0 = GPIO1 under the hood)
 const float ALPHA = 0.20f;          // low-pass filter (lower = smoother)
 float filt = 0;
 
 struct Payload { uint16_t flex; uint8_t id; } tx;
 
 uint8_t ARM_MAC[6];
-// Paste your ARM board's STA MAC here:
+// Paste your ARM/receiver board's STA MAC here:
 const char* ARM_MAC_STR = "F8:B3:B7:7F:1E:D0";
 
 bool parseMac(const char* s, uint8_t out[6]){
@@ -20,24 +20,27 @@ bool parseMac(const char* s, uint8_t out[6]){
                      &out[0], &out[1], &out[2], &out[3], &out[4], &out[5]);
 }
 
-void onSend(const wifi_tx_info_t* info, esp_now_send_status_t status){
-  // optional debug:
-  // Serial.printf("send %s\n", status==ESP_NOW_SEND_SUCCESS?"OK":"FAIL");
-}
+void onSend(const wifi_tx_info_t* /*info*/, esp_now_send_status_t /*status*/){}
 
 void setup(){
   Serial.begin(115200);
   delay(200);
-  Serial.println("\n=== ESP‑NOW GLOVE SENDER ===");
+  Serial.println("\n=== ESP‑NOW GLOVE SENDER (Nano) ===");
 
   // Flex ADC
-  analogReadResolution(12);
-  analogSetAttenuation(ADC_11db);
-  analogSetPinAttenuation(FLEX_PIN, ADC_11db);
+  analogReadResolution(12);           // 0..4095
+  #ifdef ADC_11db
+    analogSetAttenuation(ADC_11db);   // ~0..3.3 V
+    analogSetPinAttenuation(FLEX_PIN, ADC_11db);
+  #endif
   filt = analogRead(FLEX_PIN);
 
   // ESP‑NOW init
+  WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true, true);
+  Serial.print("SENDER STA MAC: "); Serial.println(WiFi.macAddress());
+
   if (!parseMac(ARM_MAC_STR, ARM_MAC)){ Serial.println("BAD ARM MAC"); while(1){} }
   if (esp_now_init() != ESP_OK){ Serial.println("ESP‑NOW init FAILED"); while(1){} }
   esp_now_register_send_cb(onSend);
